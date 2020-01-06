@@ -309,14 +309,14 @@ cdef class DistanceMetric:
         Euclidean metric, the reduced distance is the squared-euclidean
         distance.
         """
-        return self.dist(x1, x2, size)
+        return self.cov(x1, x2, size)
 
     cdef int pdist(self, DTYPE_t[:, ::1] X, DTYPE_t[:, ::1] D) except -1:
         """compute the pairwise distances between points in X"""
         cdef ITYPE_t i1, i2
         for i1 in range(X.shape[0]):
             for i2 in range(i1, X.shape[0]):
-                D[i1, i2] = self.dist(&X[i1, 0], &X[i2, 0], X.shape[1])
+                D[i1, i2] = self.cov( & X[i1, 0], & X[i2, 0], X.shape[1])
                 D[i2, i1] = D[i1, i2]
         return 0
 
@@ -328,7 +328,7 @@ cdef class DistanceMetric:
             raise ValueError('X and Y must have the same second dimension')
         for i1 in range(X.shape[0]):
             for i2 in range(Y.shape[0]):
-                D[i1, i2] = self.dist(&X[i1, 0], &Y[i2, 0], X.shape[1])
+                D[i1, i2] = self.cov( & X[i1, 0], & Y[i2, 0], X.shape[1])
         return 0
 
     cdef DTYPE_t _rdist_to_dist(self, DTYPE_t rdist) nogil except -1:

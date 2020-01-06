@@ -1199,7 +1199,7 @@ cdef class BinaryTree:
         if self.euclidean:
             return euclidean_dist(x1, x2, size)
         else:
-            return self.dist_metric.dist(x1, x2, size)
+            return self.dist_metric.cov(x1, x2, size)
 
     cdef inline DTYPE_t rdist(self, DTYPE_t* x1, DTYPE_t* x2,
                               ITYPE_t size) nogil except -1:
@@ -2103,9 +2103,9 @@ cdef class BinaryTree:
                         return -1
                     indices[count] = idx_array[i]
                     if return_distance:
-                        distances[count] = self.dist(pt, (data + n_features
-                                                          * idx_array[i]),
-                                                     n_features)
+                        distances[count] = self.cov(pt, (data + n_features
+                                                         * idx_array[i]),
+                                                    n_features)
                     count += 1
 
         #------------------------------------------------------------
@@ -2235,8 +2235,8 @@ cdef class BinaryTree:
                     logsubexp(global_log_bound_spread,
                               node_log_bound_spreads[i_node])
                 for i in range(node_info.idx_start, node_info.idx_end):
-                    dist_pt = self.dist(pt, data + n_features * idx_array[i],
-                                        n_features)
+                    dist_pt = self.cov(pt, data + n_features * idx_array[i],
+                                       n_features)
                     log_density = compute_log_kernel(dist_pt, h, kernel)
                     if with_sample_weight:
                         log_weight = np.log(sample_weight[idx_array[i]])
@@ -2370,8 +2370,8 @@ cdef class BinaryTree:
             global_log_bound_spread[0] = logsubexp(global_log_bound_spread[0],
                                                    local_log_bound_spread)
             for i in range(node_info.idx_start, node_info.idx_end):
-                dist_pt = self.dist(pt, (data + n_features * idx_array[i]),
-                                    n_features)
+                dist_pt = self.cov(pt, (data + n_features * idx_array[i]),
+                                   n_features)
                 log_dens_contribution = compute_log_kernel(dist_pt, h, kernel)
                 if with_sample_weight:
                     log_weight = np.log(sample_weight[idx_array[i]])
@@ -2475,8 +2475,8 @@ cdef class BinaryTree:
             # If node is a leaf, go through all points
             if node_info.is_leaf:
                 for i in range(node_info.idx_start, node_info.idx_end):
-                    dist_pt = self.dist(pt, (data + n_features * idx_array[i]),
-                                        n_features)
+                    dist_pt = self.cov(pt, (data + n_features * idx_array[i]),
+                                       n_features)
                     j = i_max - 1
                     while (j >= i_min) and (dist_pt <= r[j]):
                         count[j] += 1
@@ -2532,11 +2532,11 @@ cdef class BinaryTree:
                 # If both nodes are leaves, go through all points
                 for i1 in range(node_info1.idx_start, node_info1.idx_end):
                     for i2 in range(node_info2.idx_start, node_info2.idx_end):
-                        dist_pt = self.dist((data1 + n_features
-                                             * idx_array1[i1]),
-                                            (data2 + n_features
+                        dist_pt = self.cov((data1 + n_features
+                                            * idx_array1[i1]),
+                                           (data2 + n_features
                                              * idx_array2[i2]),
-                                            n_features)
+                                           n_features)
                         j = i_max - 1
                         while (j >= i_min) and (dist_pt <= r[j]):
                             count[j] += 1

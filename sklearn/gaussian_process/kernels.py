@@ -22,12 +22,15 @@ optimization.
 from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 import math
+from itertools import combinations
 from inspect import signature
 import warnings
 
 import numpy as np
 from scipy.special import kv, gamma
 from scipy.spatial.distance import pdist, cdist, squareform
+
+from sklearn.gaussian_process.covar_functions import CovarianceFunction
 
 from ..metrics.pairwise import pairwise_kernels
 from ..base import clone
@@ -1952,3 +1955,250 @@ class PairwiseKernel(Kernel):
     def __repr__(self):
         return "{0}(gamma={1}, metric={2})".format(
             self.__class__.__name__, self.gamma, self.metric)
+
+
+class CustomKernel(GenericKernelMixin, Kernel):
+    """
+    Custom kernel class.
+    Parameters
+    ----------
+    covariance: CovarianceFunction, f:(x,y)->float
+        Distance function between objects used.
+        If it has hyperparameters, must be a GenericDistance object
+        that wraps around the distance and its gradient w.r.t the
+        log of the hyperparameters.
+    hyperparams: list
+        List of Hyperparameter objects as needed by the Kernel class
+    hyperparam_values: dict
+        Dictionary for the hyperparameter values and bounds
+    stationary
+    """
+
+    def __init__(self, covariance, input_params = {}, stationary = False):
+
+        self.stationary = stationary
+        self.input_params = input_params
+        self.covariance = covariance
+        self._set_hyperparams()
+
+        super().__init__()
+
+    def _set_hyperparams(self):
+
+        hyperparams = [Hyperparameter("covariance", "numeric", "fixed", 1),
+                       Hyperparameter("input_params", "numeric", "fixed", 1),
+                       Hyperparameter("stationary", "numeric", "fixed", 1)]
+        if not self.input_params is None:
+            d = self.input_params
+            keys = d.keys()
+            fixed_hp = []
+            var_hp = []
+            # Generate Hyperparameter objects for the input
+            for key in keys:
+                if key.endswith('_bounds'):
+                    pass
+                # if a hyperparameter without bounds is input, it is recorded as fixed
+                elif not key+'_bounds' in keys:
+                    fixed_hp.append(Hyperparameter(key, 'numeric', 'fixed', 1))
+                # otherwise we use the corresponding bounds
+                else:
+                    var_hp.append(Hyperparameter(key, 'numeric', d[key+'_bounds'], 1))
+
+            hyperparams += fixed_hp
+            hyperparams += var_hp
+
+        self.hyperparams = hyperparams
+
+    @property
+    def hyperparameters(self):
+        return self.hyperparams
+
+    def get_params(self, deep=True):
+        """Get parameters of this kernel.
+
+        Parameters
+        ----------
+        deep : boolean, optional
+            If True, will return the parameters for this estimator and
+            contained subobjects that are estimators.
+
+        Returns
+        -------
+        params : mapping of string to any
+            Parameter names mapped to their values.
+        """
+        return self.input_params
+
+    def set_params(self, **params):
+        """Set the parameters of this kernel.
+
+        Returns
+        -------
+        self
+        """
+        if not params:
+            # Simple optimisation to gain speed (inspect is slow)
+            return self
+
+        valid_params = self.get_params(deep=True)
+        for key, value in params.items():
+            if key not in valid_params:
+                raise ValueError('Invalid parameter %s for kernel %s. '
+                                 'Check the list of available parameters '
+                                 'with `kernel.get_params().keys()`.' %
+                                 (key, self.__class__.__name__))
+            self.input_params[key] = value
+
+        return self
+
+    def is_stationary(self):
+        return self.stationary
+
+    def diag(self, X):
+        return np.array([self.cov(x, x) for x in X])
+
+    @property
+    def requires_vector_input(self):
+        return False
+
+    def param_values(self):
+        if self.input_params is None:
+            return None
+        else:
+            return {k: v for k, v in self.input_params.items() if not k.endswith('_bounds')}
+
+    def cov(self, x, y):
+        """
+        Call the stored covariance function, with the current hyperparameters (if any)
+        Parameters
+        ----------
+        x : any
+            Left argument of the covariance function to be evaluated
+        y : any
+            Right argument of the covariance function to be evaluated
+        Returns
+        -------
+        d : float
+            covariance of x and y.
+        """
+
+        if self.input_params is None:
+            c = self.covariance(x, y)
+        else:
+            c = self.covariance(x, y, self.param_values())
+
+        return c
+
+    def grad(self,x ,y, param_name):
+        """
+
+        Parameters
+        ----------
+        x
+        y
+        param_name
+
+        Returns
+        -------
+
+        """
+        if self.input_params is None:
+            g = self.covariance.grad(x, y, param_name)
+        else:
+            g = self.covariance.grad(x, y, self.param_values(), param_name)
+
+        return g
+
+    def __call__(self, X, Y=None, eval_gradient=False):
+        """
+        Return the kernel k(X, Y) and optionally its gradient.
+        Parameters
+        ----------
+        X : array, shape (n_samples_X, n_features)
+            Left argument of the returned kernel k(X, Y)
+        Y : array, shape (n_samples_Y, n_features), (optional, default=None)
+            Right argument of the returned kernel k(X, Y). If None, k(X, X)
+            if evaluated instead.
+        eval_gradient : bool (optional, default=False)
+            Determines whether the gradient with respect to the kernel
+            hyperparameter is determined. Only supported when Y is None.
+        Returns
+        -------
+        K : array, shape (n_samples_X, n_samples_Y)
+            Kernel k(X, Y)
+        K_gradient : array (opt.), shape (n_samples_X, n_samples_X, n_dims)
+            The gradient of the kernel k(X, X) with respect to the
+            hyperparameter of the kernel. Only returned when eval_gradient
+            is True.
+        """
+        # print(f"kernel called on X:{X}, Y:{Y}, eval_grad = {eval_gradient}")
+        X = np.atleast_2d(X)
+
+        if Y is None:
+
+            dists = []
+            # TODO more efficient looping
+            dists = list(map(lambda pair: self.cov(pair[0], pair[1]),
+                             combinations(X, 2)))
+
+            dists = np.array(dists)
+
+            # convert from upper-triangular matrix to square matrix
+            K = squareform(dists)
+
+            # fill the diagonal
+            n = X.shape[0]
+            K[range(n), range(n)] = self.diag(X)
+
+        else:
+            Y = np.atleast_2d(Y)
+            if eval_gradient:
+                raise ValueError(
+                    "Gradient can only be evaluated when Y is None.")
+
+            dists = []
+            # TODO more efficient looping
+            for x in X:
+                for y in Y:
+
+                    dists.append(self.cov(x, y))
+
+            dists = np.array(dists)
+            K = dists.reshape(X.shape[0], Y.shape[0])
+
+        if eval_gradient:
+
+            grad_list = []
+            # go through each hyperparameter
+            for param in self.hyperparams:
+                if not param.fixed:
+                    param_gradient = \
+                        np.array([[self.grad(x1, x2, param.name) for x1 in X] for x2 in X])
+                    param_gradient = param_gradient[:, :, np.newaxis]
+                else:
+                    param_gradient = np.empty((K.shape[0], K.shape[1], 0))
+
+                grad_list.append(param_gradient)
+            return K, np.dstack(grad_list)
+
+        else:
+            return K
+
+
+def generate_kernel(f, f_grad = None, **params):
+    """
+    Parameters
+    ----------
+    f : covariance function
+    f_grad: covariance function gradient
+    params: parameters of the covariance function
+
+    Returns
+    -------
+    custom_kernel: a CustomKernel object with the above
+    covariance function
+    """
+    # TODO integrity checks
+    covar_func = CovarianceFunction(f, f_grad)
+    custom_kernel = CustomKernel(covar_func, params)
+    return custom_kernel

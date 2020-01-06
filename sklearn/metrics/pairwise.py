@@ -1774,7 +1774,9 @@ PAIRWISE_KERNEL_FUNCTIONS = {
     'rbf': rbf_kernel,
     'laplacian': laplacian_kernel,
     'sigmoid': sigmoid_kernel,
-    'cosine': cosine_similarity, }
+    'cosine': cosine_similarity,
+    'tanimoto': distance.jaccard,
+}
 
 
 def kernel_metrics():
@@ -1814,6 +1816,7 @@ KERNEL_PARAMS = {
     "rbf": frozenset(["gamma"]),
     "laplacian": frozenset(["gamma"]),
     "sigmoid": frozenset(["gamma", "coef0"]),
+    'tanimoto': (),
 }
 
 

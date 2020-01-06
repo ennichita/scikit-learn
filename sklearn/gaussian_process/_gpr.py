@@ -6,14 +6,16 @@
 
 import warnings
 from operator import itemgetter
+from copy import deepcopy
 
 import numpy as np
 from scipy.linalg import cholesky, cho_solve, solve_triangular
 import scipy.optimize
 
+
 from ..base import BaseEstimator, RegressorMixin, clone
 from ..base import MultiOutputMixin
-from .kernels import RBF, ConstantKernel as C
+from .kernels import RBF, ConstantKernel as C, CustomKernel
 from ..utils import check_random_state
 from ..utils.validation import check_X_y, check_array
 from ..utils.optimize import _check_optimize_result
@@ -182,7 +184,7 @@ class GaussianProcessRegressor(MultiOutputMixin,
             self.kernel_ = C(1.0, constant_value_bounds="fixed") \
                 * RBF(1.0, length_scale_bounds="fixed")
         else:
-            self.kernel_ = clone(self.kernel)
+            self.kernel_ = deepcopy(self.kernel)
 
         self._rng = check_random_state(self.random_state)
 
@@ -244,7 +246,7 @@ class GaussianProcessRegressor(MultiOutputMixin,
                     optima.append(
                         self._constrained_optimization(obj_func, theta_initial,
                                                        bounds))
-            # Select result from run with minimal (negative) log-marginal
+            # Select result from run with minimal (negative) log-margina
             # likelihood
             lml_values = list(map(itemgetter(1), optima))
             self.kernel_.theta = optima[np.argmin(lml_values)][0]
@@ -335,6 +337,7 @@ class GaussianProcessRegressor(MultiOutputMixin,
                 return y_mean
         else:  # Predict based on GP posterior
             K_trans = self.kernel_(X, self.X_train_)
+
             y_mean = K_trans.dot(self.alpha_)  # Line 4 (y_mean = f_star)
             y_mean = self._y_train_mean + y_mean  # undo normal.
             if return_cov:
