@@ -168,3 +168,42 @@ Citation
 ~~~~~~~~
 
 If you use scikit-learn in a scientific publication, we would appreciate citations: http://scikit-learn.org/stable/about.html#citing-scikit-learn
+
+Fork details
+~~~~~~~~~~~~
+
+To use a Gaussian Process Regressor (GPR), we need to define a Kernel function.
+This kernel function can be thought of as a similarity measure between two input data points.
+Any inner product can be used as a kernel function, as well as the sum,
+product or exponentiation of already existing kernels. This generation process gives a huge range of kernels,
+of which only about 10 are coded in the scikit library.
+What I’ve written allows for a quick definition of the kernel function (ex. f(x,y) = a*e^(-norm(x-y)),
+the CustomKernel class taking care of the actual Kernel object generation.
+
+Most kernels commonly used are actually isotropic. This means that they only depend on the distance between the two input points.
+Another issue with the scikit library is that the distance metric are hard coded into the kernel objects.
+For example, the RBF object uses the squared euclidean (L2) distance, which has two drawbacks:
+
+- We can’t use features  like fingerprints, graphs, etc. as they’re not compatible with the distance metric
+- We’d have to write a kernel object for each new metric tried, which is very tedious
+
+One additional complication is that most kernels have a tunable hyperparameter. This is used by the GPR, when fitting the train data:
+
+- It used the kernel with some default hyperparameter value on the data
+- Computes the log-marginal likelihood for this default value
+- Performs gradient descent to tune the hyperparameter and optimize the likelihood
+- Saves the hyperparameter value and uses it for predicting future data
+
+One might notice that to perform gradient descent, we need to have a gradient function.
+This is, again, hard coded into the existing Kernel objects in scikit.
+For custom kernels and metrics, the only workaround is the PairwiseKernel object, which approximates it.
+The drawbacks for this are:
+
+- It can only use a single hyperparameter galled ‘gamma’
+- The gradient is numerically computed, which is both slow and innacurate
+- There is still no separation between the metric distance and the kernel function. That is, for different metrics (for different features perhaps), you need to code different functions.
+
+The code I’ve written also allows for a gradient function definition, which is used by the optimizer when fitting the data.
+
+Usage
+~~~~~

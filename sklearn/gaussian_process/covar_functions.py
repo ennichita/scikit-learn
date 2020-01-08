@@ -109,3 +109,22 @@ def dot_prod_grad(x, y, sigma, param = None):
     else:
         raise Warning(f"Parameter {param} not defined for dot_prod_grad")
 
+# exponential sin squared function
+def exp_sin_sq(x, y, length_scale, periodicity, metric=distance.sqeuclidean):
+    return np.exp(-2 * (np.sin(np.pi / periodicity * metric(x, y))/length_scale)**2)
+# dot product function gradient
+def exp_sin_sq_grad(x, y, length_scale, periodicity, metric = distance.sqeuclidean, param = None):
+    if param is None:
+        param = "length_scale"
+
+    # TODO compute the gradients
+    if param == "length_scale":
+        return 1
+
+    if param == "periodicity":
+        return 1
+
+    else:
+        raise Warning(f"Parameter {param} not defined for exp_sin_sq_grad")
+
+

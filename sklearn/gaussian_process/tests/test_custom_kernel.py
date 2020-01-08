@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 from scipy.spatial import distance
 from sklearn.gaussian_process.covar_functions import  *
-from sklearn.gaussian_process.kernels import Sum, Exponentiation, Product, CustomKernel, RBF, ConstantKernel, DotProduct, generate_kernel
+from sklearn.gaussian_process.kernels import ExpSineSquared, Sum, Exponentiation, Product, CustomKernel, RBF, ConstantKernel, DotProduct, generate_kernel
 from sklearn.gaussian_process._gpr import GaussianProcessRegressor
 
 
@@ -90,11 +90,34 @@ def test_dot_prod():
     # assert that the two give almost the same predictions
     assert(np.all(np.isclose(preds1, preds2)))
 
+def test_exp_sin_sq():
+
+    # define a custom kernel with the exponential sin squared covariance function
+    kernel = generate_kernel(exp_sin_sq, exp_sin_sq_grad,
+                             length_scale = 1, length_scale_bounds = (1e-5, 1e5),
+                             periodicity = 1, periodicity_bounds = (1e-5, 1e5))
+
+    # create a GPR with the above kernel and use it on the data
+    model = GaussianProcessRegressor(kernel=kernel, random_state=0)
+    model.fit(X_train, Y_train)
+    preds1 = model.predict(X_test)
+
+    # do the same with an RBF, with the same length_scale and bounds
+    kernel = ExpSineSquared()
+
+    model = GaussianProcessRegressor(kernel=kernel, random_state=0)
+    model.fit(X_train, Y_train)
+    preds2 = model.predict(X_test)
+
+    # assert that the two give almost the same predictions
+    # TODO when grad is computed: assert(np.all(np.isclose(preds1, preds2)))
+
+
 def test_sum():
 
     # define rbf and dot product custom kernels, and set hyperparameters
-    custom_rbf_kernel = generate_kernel(rbf, rbf_grad, length_scale = 1, length_scale_bounds = (1e-5, 1e5))
-    custom_dot_prod_kernel = generate_kernel(dot_prod, dot_prod_grad, sigma = 1, sigma_bounds = (1e-5, 1e5))
+    custom_rbf_kernel = generate_kernel(rbf, rbf_grad)
+    custom_dot_prod_kernel = generate_kernel(dot_prod, dot_prod_grad)
 
     sum_custom_kernel = Sum(custom_dot_prod_kernel, custom_rbf_kernel)
     model = GaussianProcessRegressor(kernel=sum_custom_kernel, random_state=0)
@@ -143,3 +166,33 @@ def test_exponentiation():
     preds2 = model.predict(X_test)
 
     assert(np.all(np.isclose(preds1, preds2)))
+
+def test_generate_kernel() :
+
+    kernel = generate_kernel(rbf, rbf_grad, length_scale=1, length_scale_bounds=(1e-5, 1e5), metric=distance.jaccard)
+    model = GaussianProcessRegressor(kernel = kernel, random_state = 0)
+    model.fit(X_train, Y_train)
+    print(model.predict(X_test))
+
+    kernel = generate_kernel(rbf, rbf_grad, length_scale_bounds=(1e-5, 1e5), metric=distance.jaccard)
+    model = GaussianProcessRegressor(kernel=kernel, random_state=0)
+    model.fit(X_train, Y_train)
+    print(model.predict(X_test))
+
+    kernel = generate_kernel(rbf, rbf_grad, length_scale=1, metric=distance.sqeuclidean)
+    model = GaussianProcessRegressor(kernel=kernel, random_state=0)
+    model.fit(X_train, Y_train)
+    print(model.predict(X_test))
+
+    kernel = generate_kernel(rbf, rbf_grad, length_scale=1)
+    model = GaussianProcessRegressor(kernel=kernel, random_state=0)
+    model.fit(X_train, Y_train)
+    print(model.predict(X_test))
+
+    kernel = generate_kernel(rbf, rbf_grad)
+    model = GaussianProcessRegressor(kernel=kernel, random_state=0)
+    model.fit(X_train, Y_train)
+    print(model.predict(X_test))
+
+
+

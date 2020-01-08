@@ -2184,6 +2184,8 @@ class CustomKernel(GenericKernelMixin, Kernel):
         else:
             return K
 
+DEFAULT_VALUE = 1
+DEFAULT_BOUNDS = (1e-5, 1e5)
 
 def generate_kernel(f, f_grad = None, **params):
     """
@@ -2198,7 +2200,36 @@ def generate_kernel(f, f_grad = None, **params):
     custom_kernel: a CustomKernel object with the above
     covariance function
     """
-    # TODO integrity checks
-    covar_func = CovarianceFunction(f, f_grad)
+    # get the list of parameter names of f
+    var_names = list(f.__code__.co_varnames)
+
+    # exclude the input from the parameter names
+    var_names = var_names[2:]
+
+    # create the covariance function object
+    if 'metric' in params:
+        if not 'metric' in var_names:
+            raise RuntimeError(f'Metric not supported for {f}')
+        else:
+            covar_func = CovarianceFunction(f, f_grad, params['metric'])
+    else:
+        covar_func = CovarianceFunction(f, f_grad)
+
+    # exclude the metric from the parameter names
+    var_names = [var for var in var_names if var != 'metric']
+    params.pop('metric', None)
+
+    # check for unassigned parameters and give them default values and bounds
+    # if a parameter has a value but not the bounds, it is considered fixed
+    for var in var_names:
+        if not params.get(var):
+            if params.get(var+'_bounds'):
+                params[var] = DEFAULT_VALUE
+            else:
+                params[var] = DEFAULT_VALUE
+                params[var+'_bounds'] = DEFAULT_BOUNDS
+
+    # TODO check for parameters not used in the kernel function
+
     custom_kernel = CustomKernel(covar_func, params)
     return custom_kernel
